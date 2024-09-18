@@ -28,33 +28,33 @@ DBG_SUBS = True
 DBG_EXTRA = False
 
 ## set local path variables
-subsample_pts_pth = 'F:/PFET/mid/subsample_pts.h5'
-dat_fold_path = 'F:/PFET/ECOSTRESS/emissivity/'
-results_path = 'F:/PFET/results/ECOSTRESS/emissivity/'
+subsample_pts_pth = 'F:/PFET/mid/eco_extr_points.parquet'
+dat_fold_path = 'F:/PFET/ECOSTRESS/emissivity/lste001/'
+results_path = 'F:/PFET/results/ECOSTRESS/lste001/'
 
 ## set regex pattern variables and dtime format variable
 date_reg_pattern = re.compile(r'_doy(\d+)_aid') # pattern to match date string
 var_reg_pattern = re.compile(r'SDS_(\w+)_doy') # pattern to match variable name
-dtime_format = '%Y%j' # format of date string in filenames
+dtime_format = '%Y%j%H%M%S' # format of date string in filenames
 
 # ## set problem dtimes
 # problem_dtime_str = []
 
-## subset subsample points to required columns
-subsample_pts = pd.read_hdf(subsample_pts_pth, key='data')
-extr_df = subsample_pts[['utmStrIDX', 'wgs84StrIDX', 'type', 'longitude', 'latitude']].copy().reset_index(drop=True)
+## read subsample points and subset to required columns
+subsample_pts = pd.read_parquet(subsample_pts_pth)
+extr_df = subsample_pts[['utmStrIDX', 'wgs84StrIDX', 'longitude', 'latitude']].copy().reset_index(drop=True)
 del subsample_pts
 gc.collect()
 
 # list data folders
 dat_folds = sorted(os.listdir(dat_fold_path))
 
-## main loop - for each data folder
+## main loop - for each data folder...
 for fold_tmp in dat_folds:
     ## initialize storage df and save path
     df_store = pd.DataFrame()
     save_pth_tmp = results_path + f'extr_{fold_tmp}.parquet'
-    if DBG: print(f'working on HLS folder: {fold_tmp}, save path: {save_pth_tmp}')
+    if DBG: print(f'working on ecostress folder: {fold_tmp}, save path: {save_pth_tmp}')
 
     ## list files and filter to .tif files
     fold_path = dat_fold_path + fold_tmp + '/'
@@ -116,7 +116,7 @@ for fold_tmp in dat_folds:
     ## wrap up
     if DBG: print('saving...')
     df_store.to_parquet(save_pth_tmp, index=False)
-    if DBG: print('\n\nDONE WITH YEAR\n\n')
+    if DBG: print('\n\nDONE WITH FOLDER\n\n')
     del df_store
     gc.collect()
 
