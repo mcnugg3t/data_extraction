@@ -32,12 +32,12 @@ DBG_EXTRA = True
 
 ## set local path variables
 subsample_pts_pth = 'F:/PFET/mid/eco_extr_points.parquet'
-dat_fold_path = 'F:/PFET/ECOSTRESS/emissivity/lste001/'
-results_path = 'F:/PFET/results/emissivity/lste001/'
+dat_fold_path = 'F:/PFET/ECOSTRESS/emissivity/lste002/'
+results_path = 'F:/PFET/results/emissivity/lste002/'
 
 ## set regex pattern variables and dtime format variable
 date_reg_pattern = re.compile(r'_doy(\d+)_aid') # pattern to match date string
-var_reg_pattern = re.compile(r'SDS_(\w+)_doy') # pattern to match variable name
+var_reg_pattern = re.compile(r'LSTE.002_(\w+)_doy') # pattern to match variable name
 dtime_format = '%Y%j%H%M%S' # format of date string in filenames
 
 ## set check variable (e.g. Emis2)
@@ -48,10 +48,12 @@ SAVE_SCHEMA = pa.schema([
     ('utmStrIDX', pa.string()),
     ('longitude', pa.float64()),
     ('latitude', pa.float64()),
+    ('cloud_mask', pa.int32()),
     ('Emis2', pa.float64()),
     ('Emis4', pa.float64()),
     ('Emis5', pa.float64()),
     ('QC', pa.int32()),
+    ('water_mask', pa.int32()),
     ('dtime_str', pa.string())
 ])
 
@@ -59,10 +61,12 @@ DF_TYPES = {
     'utmStrIDX': 'string',
     'longitude': 'float64',
     'latitude': 'float64',
+    'cloud_mask': 'int32',
     'Emis2': 'float64',
     'Emis4': 'float64',
     'Emis5': 'float64',
     'QC': 'int32',
+    'water_mask': 'int32',
     'dtime_str': 'string'
 }
 
@@ -112,9 +116,11 @@ for fold_tmp in dat_folds:
         dtime_fls = sorted([f for f in folder_fls if match_str in f])
         if DBG: print(f'\t\tfound {len(dtime_fls)} matching files: {dtime_fls}')
 
-        ## if >= 30 files present, need to divide into 2 areas
-        ## (only applicable to HLS data)
-        if len(dtime_fls) >= 30:
+        # if less than 5 files, continue (incomplete set)
+        if len(dtime_fls) < 5:
+            continue
+        ## if >= 30 files present, need to divide into 2 areas (only applicable to HLS data)
+        elif len(dtime_fls) >= 30:
             for area_str in ['_12N', '_13N']:
                 dtime_fls_tmp = sorted([f for f in dtime_fls if area_str in f])
                 if DBG: print(f'\t\t\tworking on area: {area_str}, with {len(dtime_fls_tmp)} files: {dtime_fls_tmp}')
@@ -128,7 +134,7 @@ for fold_tmp in dat_folds:
                 if DBG: print(f'\t\t\t\tlen(df_tmp): {len(df_tmp)}')
 
                 # if df_tmp has content
-                if (~(df_tmp is None) & (len(df_tmp) > 0)):
+                if ((df_tmp is not None) & (len(df_tmp) > 0)):
                     # filter df_tmp to meaningful rows
                     df_tmp = df_tmp[df_tmp[CHECK_VAR].notnull() & df_tmp[CHECK_VAR] != 0].copy().reset_index(drop=True)
                     # debug print after filtering
@@ -145,7 +151,7 @@ for fold_tmp in dat_folds:
 
                 del df_tmp
                 gc.collect()
-
+        # otherwise (normal case)
         else:
             df_tmp = extract_multiple_tifs(fold_path, dtime_fls, extr_df, var_reg_pattern, dtime_str_tmp)
 
@@ -153,7 +159,7 @@ for fold_tmp in dat_folds:
                 if DBG: print('\t\t\tdf_tmp is null/empty, continuing...')
                 continue
 
-            if (~(df_tmp is None) & (len(df_tmp) > 0)):
+            if ((df_tmp is not None) & (len(df_tmp) > 0)):
                 # filter df_tmp to meaningful rows
                 df_tmp = df_tmp[df_tmp[CHECK_VAR].notnull() & df_tmp[CHECK_VAR] != 0].copy().reset_index(drop=True)
                 # debug print after filtering
