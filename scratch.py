@@ -13,8 +13,20 @@ from local_functions import id_unique_dates, extract_multiple_tifs, extract_tif_
 import pyarrow
 import fastparquet
 
-# get variables for lste002
-tst_pth = "F:/PFET/ECOSTRESS/emissivity/lste002/2023_1"
+# B01
+# B02
+# B03
+# B04
+# B05
+# B06
+# B07
+# B09
+# B10
+# B11
+# Fmask
+
+# get variables for HLSL
+tst_pth = "F:/PFET/HLS/hlsl/2022_1"
 tst_fls = os.listdir(tst_pth)
 date_reg_tst = re.compile(r'_doy(\d+)_aid')
 dates_tst = id_unique_dates(tst_fls, date_reg_tst, DBG=False, DBG_SUBS=False)
@@ -22,16 +34,28 @@ print(f'dates_tst 0: {dates_tst[0]}')
 subs_str = '_doy' + dates_tst[0]
 print(f'subs_str : {subs_str}')
 tst_fls_subs = [fl for fl in tst_fls if subs_str in fl]
-print(f'{tst_fls_subs}\n\n')
+for fl in tst_fls_subs:
+    print(fl)
+
+# get variables for lste002
+# tst_pth = "F:/PFET/ECOSTRESS/emissivity/lste002/2023_1"
+# tst_fls = os.listdir(tst_pth)
+# date_reg_tst = re.compile(r'_doy(\d+)_aid')
+# dates_tst = id_unique_dates(tst_fls, date_reg_tst, DBG=False, DBG_SUBS=False)
+# print(f'dates_tst 0: {dates_tst[0]}')
+# subs_str = '_doy' + dates_tst[0]
+# print(f'subs_str : {subs_str}')
+# tst_fls_subs = [fl for fl in tst_fls if subs_str in fl]
+# print(f'{tst_fls_subs}\n\n')
 
 
 # test regex pattern
-pattern = r'LSTE.002_(\w+)_doy'
-string = 'LSTE.002_cloud_mask_doy'
-match = re.search(pattern, string)
-if match:
-    print("Matched:", match.group(0))
-    print("Captured group:", match.group(1))
+# pattern = r'LSTE.002_(\w+)_doy'
+# string = 'LSTE.002_cloud_mask_doy'
+# match = re.search(pattern, string)
+# if match:
+#     print("Matched:", match.group(0))
+#     print("Captured group:", match.group(1))
 
 # ## test extraction function
 # print(f"import pyarrow version {pyarrow.__version__}")
