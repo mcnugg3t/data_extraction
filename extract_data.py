@@ -16,6 +16,7 @@ import pyarrow.parquet as pq
 #import fastparquet
 
 import pandas as pd
+import numpy as np
 
 print("Python version:", sys.version)
 print("Rasterio version:", rasterio.__version__)
@@ -28,22 +29,25 @@ DBG_EXTRA = True
 
 ## set local path variables
 subsample_pts_pth = 'F:/PFET/mid/eco_extr_points.parquet'
-dat_fold_path = 'F:/PFET/HLS/hlsl/'
-results_path = 'F:/PFET/results/HLSL/'
-save_pth_tmp = results_path + 'hlsl.parquet'
+dat_fold_path = 'F:/PFET/ECOSTRESS/cloud/cloud002/'
+results_path = 'F:/PFET/results/cloud/'
+save_pth_tmp = results_path + 'cloud002.parquet'
 
 ## set regex pattern variables and dtime format variable
 date_reg_pattern = re.compile(r'_doy(\d+)_aid') # pattern to match date string
-var_reg_pattern = re.compile(r'HLSL30.020_(\w+)_doy') # pattern to match variable name
-dtime_format = '%Y%j' # format of date string in filenames
-# dtime_format = '%Y%j%H%M%S' # format of date string in filenames
+var_reg_pattern = re.compile(r'CLOUD.002_(\w+)_doy')
+#var_reg_pattern = re.compile(r'HLSL30.020_(\w+)_doy') # pattern to match variable name
+#dtime_format = '%Y%j' # format of date string in filenames
+dtime_format = '%Y%j%H%M%S' # format of date string in filenames
 
 ## filter out
 filter_out = ['SZA', 'SAA', 'VAA', 'VZA']
 
 ## set check variable (e.g. Emis2) and minimum number of files (e.g. 2 for geolocation, 5 for LSTE, etc.)
-CHECK_VAR = 'B01'
-MIN_FILES = 11
+CHECK_VAR = 'Cloud_final'
+NA_VAL = 255
+MIN_FILES = 2
+FILE_THRESHOLD = 22
 
 # B01
 # B02
@@ -63,8 +67,8 @@ SAVE_SCHEMA = pa.schema([
     ('longitude', pa.float64()),
     ('latitude', pa.float64()),
     # ('CloudMask', pa.int32()),
-    # ('Cloud_final', pa.int32()),
-    # ('Cloud_confidence', pa.int32()),
+    ('Cloud_confidence', pa.int32()),
+    ('Cloud_final', pa.int32()),
     #('view_azimuth', pa.float64()),
     #('view_zenith', pa.float64()),
     # ('cloud_mask', pa.int32()),
@@ -73,17 +77,17 @@ SAVE_SCHEMA = pa.schema([
     # ('Emis5', pa.float64()),
     # ('QC', pa.int32()),
     # ('water_mask', pa.int32()),
-    ('B01', pa.float64()),
-    ('B02', pa.float64()),
-    ('B03', pa.float64()),
-    ('B04', pa.float64()),
-    ('B05', pa.float64()),
-    ('B06', pa.float64()),
-    ('B07', pa.float64()),
-    ('B09', pa.float64()),
-    ('B10', pa.float64()),
-    ('B11', pa.float64()),
-    ('Fmask', pa.int32()),
+    # ('B01', pa.float64()),
+    # ('B02', pa.float64()),
+    # ('B03', pa.float64()),
+    # ('B04', pa.float64()),
+    # ('B05', pa.float64()),
+    # ('B06', pa.float64()),
+    # ('B07', pa.float64()),
+    # ('B09', pa.float64()),
+    # ('B10', pa.float64()),
+    # ('B11', pa.float64()),
+    # ('Fmask', pa.int32()),
     ('dtime_str', pa.string())
 ])
 
@@ -92,8 +96,8 @@ DF_TYPES = {
     'longitude': 'float64',
     'latitude': 'float64',
     # 'CloudMask': 'int32',
-    # 'Cloud_final': 'int32',
-    # 'Cloud_confidence': 'int32',
+    'Cloud_confidence': 'int32',
+    'Cloud_final': 'int32',
     #'view_azimuth': 'float64',
     #'view_zenith': 'float64',
     # 'cloud_mask': 'int32',
@@ -102,17 +106,17 @@ DF_TYPES = {
     # 'Emis5': 'float64',
     # 'QC': 'int32',
     # 'water_mask': 'int32',
-    'B01': 'float64',
-    'B02': 'float64',
-    'B03': 'float64',
-    'B04': 'float64',
-    'B05': 'float64',
-    'B06': 'float64',
-    'B07': 'float64',
-    'B09': 'float64',
-    'B10': 'float64',
-    'B11': 'float64',
-    'Fmask': 'int32',
+    # 'B01': 'float64',
+    # 'B02': 'float64',
+    # 'B03': 'float64',
+    # 'B04': 'float64',
+    # 'B05': 'float64',
+    # 'B06': 'float64',
+    # 'B07': 'float64',
+    # 'B09': 'float64',
+    # 'B10': 'float64',
+    # 'B11': 'float64',
+    # 'Fmask': 'int32',
     'dtime_str': 'string'
 }
 
@@ -124,18 +128,16 @@ gc.collect()
 
 # list data folders
 dat_folds = sorted(os.listdir(dat_fold_path))
-
 # init parquet writer
 writer = pq.ParquetWriter(save_pth_tmp, SAVE_SCHEMA)
 
 ## main loop - for each data folder...
 for fold_tmp in dat_folds:
-    ## initialize storage df and save path
-    #df_store = pd.DataFrame()
+    # debug print
     if DBG: print(f'working on data folder: {fold_tmp}, save path: {save_pth_tmp}')
 
     ## list files and filter to .tif files
-    fold_path = dat_fold_path + fold_tmp + '/'
+    fold_path = dat_fold_path + fold_tmp + '/' # assemble full path to fold_tmp
     folder_fls = os.listdir(fold_path) # list all files in directory
     folder_fls = [f for f in folder_fls if f.endswith('.tif')] # filter to .tif images
     folder_fls = [f for f in folder_fls if not any(kw in f for kw in filter_out)] # filter out keywords
@@ -150,82 +152,85 @@ for fold_tmp in dat_folds:
     #           1) ID matching files
     #           2) loop over those files:
     #               A) ID variable
-    #               B) extract data to our coords of interest
+    #               B) extract data to coordinates of interest
     for idy, dtime_str_tmp in enumerate(uq_dates):
         ## convert string to datetime to check month
         dtime_tmp = datetime.strptime(dtime_str_tmp, dtime_format)
-
         if dtime_tmp.month not in [3, 4, 5, 6, 7, 8, 9, 10]:
              if DBG: print('\n\t\tDTIME OUT OF MONTH BOUNDS, CONTINUING\n\n')
              continue
-
-        #dtime_tmp = datetime.strptime(dtime_str_tmp, dtime_format) # datetime string to python datetime
+        # debug print
         if DBG: print(f'\n\tworking on {idy} of {len_uq_dates} with dtime_str: {dtime_str_tmp}, dtime_tmp: {dtime_tmp}')
 
         ## subset to matching files
-        match_str = '_doy' + dtime_str_tmp ## CHECK !!
-        dtime_fls = sorted([f for f in folder_fls if match_str in f])
-        if DBG: print(f'\t\tfound {len(dtime_fls)} matching files: {dtime_fls}')
+        match_str = '_doy' + dtime_str_tmp # assemble string to match
+        dtime_fls = sorted([f for f in folder_fls if match_str in f]) # filter to match string
+        if DBG: print(f'\t\tfound {len(dtime_fls)} matching files: {dtime_fls}') # debug print
 
-        ## if >= 22 files present, need to divide into 2 areas (only applicable to HLS data)
-        if len(dtime_fls) >= 22:
+        ## if >= FILE_THRESHOLD (e.g. 22) files present, need to divide into 2 areas (only applicable to HLS data)
+        if len(dtime_fls) >= FILE_THRESHOLD:
             for area_str in ['_12N', '_13N']:
                 dtime_fls_tmp = sorted([f for f in dtime_fls if area_str in f])
+                # debug print
                 if DBG: print(f'\t\t\tworking on area: {area_str}, with {len(dtime_fls_tmp)} files: {dtime_fls_tmp}')
                 # if less than MIN_FILES files, continue (incomplete set of files for dtime_str_tmp)
                 if len(dtime_fls_tmp) < MIN_FILES:
                     continue
-
+                # extract values of relevant .tif files to coordinates
                 df_tmp = extract_multiple_tifs(fold_path, dtime_fls_tmp, extr_df, var_reg_pattern, dtime_str_tmp)
-
+                # check df_tmp has content - if not, continue
                 if ((df_tmp is None) | (len(df_tmp) == 0)):
                     if DBG: print('\t\t\tdf_tmp is null/empty, continuing...')
                     continue
-
+                # debug print
                 if DBG: print(f'\t\t\t\tlen(df_tmp): {len(df_tmp)}')
-
-                # if df_tmp has content
+                ## if df_tmp has any content, then filter to meaningful rows
                 if ((df_tmp is not None) & (len(df_tmp) > 0)):
                     # filter df_tmp to meaningful rows
-                    df_tmp = df_tmp[df_tmp[CHECK_VAR].notnull() & df_tmp[CHECK_VAR] != 0].copy().reset_index(drop=True)
+                    df_tmp = df_tmp[(df_tmp[CHECK_VAR].notnull()) &
+                                    (df_tmp[CHECK_VAR ] != NA_VAL) &
+                                    (np.isfinite(df_tmp[CHECK_VAR]))].copy().reset_index(drop=True)
                     # debug print after filtering
-                    if DBG_EXTRA:
-                        print(df_tmp.info())
+                    # if DBG_EXTRA:
+                    #     print(df_tmp.info())
                     # check types
                     df_tmp = df_tmp.astype(DF_TYPES)
                     # create table for writing
                     table_write = pa.Table.from_pandas(df_tmp, schema=SAVE_SCHEMA, preserve_index=False)
                     # write to save file
-                    if DBG: print(f'\t\t\twriting df_tmp to save file')
+                    if DBG: print(f'\t\t\twriting df_tmp with len {len(df_tmp)} to save file')
                     writer.write_table(table_write)
                     if DBG: print(f'\t\t\tdone writing...')
 
                 del df_tmp
                 gc.collect()
-        # otherwise (normal case)
+
+        ## otherwise (normal case) - no split between _12N and _13N
         else:
             # if less than MIN_FILES files, continue (incomplete set of files for dtime_str_tmp)
             if len(dtime_fls) < MIN_FILES:
                 continue
-
+            # extract data from .tif files at coordinates
             df_tmp = extract_multiple_tifs(fold_path, dtime_fls, extr_df, var_reg_pattern, dtime_str_tmp)
-
+            # if df_tmp is empty, continue
             if ( (df_tmp is None) | (len(df_tmp) == 0) ):
                 if DBG: print('\t\t\tdf_tmp is null/empty, continuing...')
                 continue
-
+            # if df_tmp has content, filter to meaningful rows
             if ((df_tmp is not None) & (len(df_tmp) > 0)):
                 # filter df_tmp to meaningful rows
-                df_tmp = df_tmp[df_tmp[CHECK_VAR].notnull() & df_tmp[CHECK_VAR] != 0].copy().reset_index(drop=True)
+                df_tmp = df_tmp[(df_tmp[CHECK_VAR].notnull()) &
+                                (df_tmp[CHECK_VAR] != NA_VAL) &
+                                (np.isfinite(df_tmp[CHECK_VAR]))].copy().reset_index(drop=True)
                 # debug print after filtering
-                if DBG_EXTRA:
-                    print(df_tmp.info())
+                # if DBG_EXTRA:
+                #     print(df_tmp.info())
                 # check types
                 df_tmp = df_tmp.astype(DF_TYPES)
                 # create table for writing
                 table_write = pa.Table.from_pandas(df_tmp, schema=SAVE_SCHEMA, preserve_index=False)
                 # write to save file
-                if DBG: print(f'\t\t\twriting df_tmp to save file')
+                if DBG: print(f'\t\t\twriting df_tmp with len {len(df_tmp)} to save file')
                 writer.write_table(table_write)
                 if DBG: print(f'\t\t\tdone writing...')
 
