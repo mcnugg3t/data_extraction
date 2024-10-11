@@ -29,24 +29,28 @@ DBG_EXTRA = True
 
 ## set local path variables
 subsample_pts_pth = 'F:/PFET/mid/eco_extr_points.parquet'
-dat_fold_path = 'F:/PFET/ECOSTRESS/cloud/cloud002/'
-results_path = 'F:/PFET/results/cloud/'
-save_pth_tmp = results_path + 'cloud002.parquet'
+dat_fold_path = 'F:/PFET/HLS/hlsl/'
+results_path = 'F:/PFET/results/hlsl/'
+save_pth_tmp = results_path + 'hlsl.parquet'
 
 ## set regex pattern variables and dtime format variable
 date_reg_pattern = re.compile(r'_doy(\d+)_aid') # pattern to match date string
-var_reg_pattern = re.compile(r'CLOUD.002_(\w+)_doy')
-#var_reg_pattern = re.compile(r'HLSL30.020_(\w+)_doy') # pattern to match variable name
-#dtime_format = '%Y%j' # format of date string in filenames
-dtime_format = '%Y%j%H%M%S' # format of date string in filenames
+#var_reg_pattern = re.compile(r'_Geolocation_(\w+)_doy')
+#var_reg_pattern = re.compile(r'CLOUD.002_(\w+)_doy')
+var_reg_pattern = re.compile(r'HLSL30.020_(\w+)_doy') # pattern to match variable name
+dtime_format = '%Y%j' # format of date string in filenames
+#dtime_format = '%Y%j%H%M%S' # format of date string in filenames
 
 ## filter out
 filter_out = ['SZA', 'SAA', 'VAA', 'VZA']
 
 ## set check variable (e.g. Emis2) and minimum number of files (e.g. 2 for geolocation, 5 for LSTE, etc.)
-CHECK_VAR = 'Cloud_final'
+CHECK_VAR = 'Fmask'
+#CHECK_VAR = 'view_azimuth'
+#CHECK_VAR = 'Cloud_final'
 NA_VAL = 255
-MIN_FILES = 2
+#NA_VAL = -1e+13
+MIN_FILES = 11
 FILE_THRESHOLD = 22
 
 # B01
@@ -67,8 +71,8 @@ SAVE_SCHEMA = pa.schema([
     ('longitude', pa.float64()),
     ('latitude', pa.float64()),
     # ('CloudMask', pa.int32()),
-    ('Cloud_confidence', pa.int32()),
-    ('Cloud_final', pa.int32()),
+    # ('Cloud_confidence', pa.int32()),
+    # ('Cloud_final', pa.int32()),
     #('view_azimuth', pa.float64()),
     #('view_zenith', pa.float64()),
     # ('cloud_mask', pa.int32()),
@@ -77,17 +81,20 @@ SAVE_SCHEMA = pa.schema([
     # ('Emis5', pa.float64()),
     # ('QC', pa.int32()),
     # ('water_mask', pa.int32()),
-    # ('B01', pa.float64()),
-    # ('B02', pa.float64()),
-    # ('B03', pa.float64()),
-    # ('B04', pa.float64()),
-    # ('B05', pa.float64()),
-    # ('B06', pa.float64()),
-    # ('B07', pa.float64()),
-    # ('B09', pa.float64()),
-    # ('B10', pa.float64()),
-    # ('B11', pa.float64()),
-    # ('Fmask', pa.int32()),
+    ('B01', pa.float64()),
+    ('B02', pa.float64()),
+    ('B03', pa.float64()),
+    ('B04', pa.float64()),
+    ('B05', pa.float64()),
+    ('B06', pa.float64()),
+    ('B07', pa.float64()),
+    #('B08', pa.float64()),
+    ('B09', pa.float64()),
+    ('B10', pa.float64()),
+    ('B11', pa.float64()),
+    #('B12', pa.float64()),
+    #('B8A', pa.float64()),
+    ('Fmask', pa.int32()),
     ('dtime_str', pa.string())
 ])
 
@@ -96,8 +103,8 @@ DF_TYPES = {
     'longitude': 'float64',
     'latitude': 'float64',
     # 'CloudMask': 'int32',
-    'Cloud_confidence': 'int32',
-    'Cloud_final': 'int32',
+    # 'Cloud_confidence': 'int32',
+    # 'Cloud_final': 'int32',
     #'view_azimuth': 'float64',
     #'view_zenith': 'float64',
     # 'cloud_mask': 'int32',
@@ -106,17 +113,20 @@ DF_TYPES = {
     # 'Emis5': 'float64',
     # 'QC': 'int32',
     # 'water_mask': 'int32',
-    # 'B01': 'float64',
-    # 'B02': 'float64',
-    # 'B03': 'float64',
-    # 'B04': 'float64',
-    # 'B05': 'float64',
-    # 'B06': 'float64',
-    # 'B07': 'float64',
-    # 'B09': 'float64',
-    # 'B10': 'float64',
-    # 'B11': 'float64',
-    # 'Fmask': 'int32',
+    'B01': 'float64',
+    'B02': 'float64',
+    'B03': 'float64',
+    'B04': 'float64',
+    'B05': 'float64',
+    'B06': 'float64',
+    'B07': 'float64',
+    #'B08': 'float64',
+    'B09': 'float64',
+    'B10': 'float64',
+    'B11': 'float64',
+    #'B12': 'float64',
+    #'B8A': 'float64',
+    'Fmask': 'int32',
     'dtime_str': 'string'
 }
 
@@ -183,7 +193,7 @@ for fold_tmp in dat_folds:
                     if DBG: print('\t\t\tdf_tmp is null/empty, continuing...')
                     continue
                 # debug print
-                if DBG: print(f'\t\t\t\tlen(df_tmp): {len(df_tmp)}')
+                # if DBG: print(f'\t\t\t\tlen(df_tmp) before filtering: {len(df_tmp)}')
                 ## if df_tmp has any content, then filter to meaningful rows
                 if ((df_tmp is not None) & (len(df_tmp) > 0)):
                     # filter df_tmp to meaningful rows
@@ -191,8 +201,8 @@ for fold_tmp in dat_folds:
                                     (df_tmp[CHECK_VAR ] != NA_VAL) &
                                     (np.isfinite(df_tmp[CHECK_VAR]))].copy().reset_index(drop=True)
                     # debug print after filtering
-                    # if DBG_EXTRA:
-                    #     print(df_tmp.info())
+                    if DBG_EXTRA:
+                        print(df_tmp.info())
                     # check types
                     df_tmp = df_tmp.astype(DF_TYPES)
                     # create table for writing
@@ -216,6 +226,8 @@ for fold_tmp in dat_folds:
             if ( (df_tmp is None) | (len(df_tmp) == 0) ):
                 if DBG: print('\t\t\tdf_tmp is null/empty, continuing...')
                 continue
+            # debug print
+            # if DBG: print(f'\t\t\t\tlen(df_tmp) before filtering: {len(df_tmp)}')
             # if df_tmp has content, filter to meaningful rows
             if ((df_tmp is not None) & (len(df_tmp) > 0)):
                 # filter df_tmp to meaningful rows
@@ -223,8 +235,8 @@ for fold_tmp in dat_folds:
                                 (df_tmp[CHECK_VAR] != NA_VAL) &
                                 (np.isfinite(df_tmp[CHECK_VAR]))].copy().reset_index(drop=True)
                 # debug print after filtering
-                # if DBG_EXTRA:
-                #     print(df_tmp.info())
+                if DBG_EXTRA:
+                    print(df_tmp.info())
                 # check types
                 df_tmp = df_tmp.astype(DF_TYPES)
                 # create table for writing
@@ -232,7 +244,7 @@ for fold_tmp in dat_folds:
                 # write to save file
                 if DBG: print(f'\t\t\twriting df_tmp with len {len(df_tmp)} to save file')
                 writer.write_table(table_write)
-                if DBG: print(f'\t\t\tdone writing...')
+                if DBG: print(f'\t\t\tdone writing...\n\n')
 
             del df_tmp
             gc.collect()

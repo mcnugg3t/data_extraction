@@ -26,16 +26,16 @@ import fastparquet
 # Fmask
 
 # get variables for HLSL
-tst_pth = "F:/PFET/HLS/hlsl/2022_1"
-tst_fls = os.listdir(tst_pth)
-date_reg_tst = re.compile(r'_doy(\d+)_aid')
-dates_tst = id_unique_dates(tst_fls, date_reg_tst, DBG=False, DBG_SUBS=False)
-print(f'dates_tst 0: {dates_tst[0]}')
-subs_str = '_doy' + dates_tst[0]
-print(f'subs_str : {subs_str}')
-tst_fls_subs = [fl for fl in tst_fls if subs_str in fl]
-for fl in tst_fls_subs:
-    print(fl)
+# tst_pth = "F:/PFET/HLS/hlss/2022_1"
+# tst_fls = os.listdir(tst_pth)
+# date_reg_tst = re.compile(r'_doy(\d+)_aid')
+# dates_tst = id_unique_dates(tst_fls, date_reg_tst, DBG=False, DBG_SUBS=False)
+# print(f'dates_tst 0: {dates_tst[0]}')
+# subs_str = '_doy' + dates_tst[0]
+# print(f'subs_str : {subs_str}')
+# tst_fls_subs = [fl for fl in tst_fls if subs_str in fl]
+# for fl in tst_fls_subs:
+#     print(fl)
 
 # get variables for lste002
 # tst_pth = "F:/PFET/ECOSTRESS/emissivity/lste002/2023_1"
